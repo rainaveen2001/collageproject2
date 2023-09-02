@@ -1,0 +1,192 @@
+import numpy as np
+import pandas as pd
+from numpy import math
+from haversine import haversine
+import xgboost
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import r2_score
+from sklearn.metrics import mean_squared_error
+from sklearn.linear_model import Lasso
+from sklearn.linear_model import Ridge
+import seaborn as sns
+from datetime import datetime
+import warnings
+warnings.filterwarnings("ignore")
+import warnings
+from pylab import rcParams
+%matplotlib inline
+import matplotlib.pyplot as plt
+import seaborn as sns; sns.set()
+warnings.filterwarnings('ignore')
+
+#mount to a drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+#Load dataset
+path ="/content/NYC Taxi Data.csv"
+NYC_df = pd.read_csv(path)
+
+#Bar ploat for trip duration
+plt.figure(figsize=[10,5])
+labels=['less then 1min','within 10 mins','within 30 mins','within hour','within day','within two days','more then two day']
+NYC_df.groupby(pd.cut(NYC_df['trip_duration'],bins=[0,60,600,1800,3600,86400,86400*2,10000000],labels=labels))['trip_duration'].count().plot(kind='bar',fontsize=10)
+plt.title("Bar plot for trip duration")
+plt.ylabel("trip counts")
+plt.ylabel("trip duration")
+plt.xticks(rotation=45)
+
+#Map Visualization
+city_long_border = [-74.03, -73.75]
+city_lat_border = [40.63,40.85]
+NYC_df.plot(kind='scatter', x='dropoff_longitude',y='dropoff_latitude',
+          color='Red',
+          s=0.2, alpha =.6)
+plt.title('Dropoffs')
+plt.ylim(city_lat_border)
+plt.xlim(city_long_border)
+
+#1	FEATUREENGINEERING
+#Calculate and assign new columns to the dataframe such as pickupday,
+#dropoffday which will help us to gain more insights from the data.
+NYC_df['pickup_day']=NYC_df['pickup_datetime'].dt.day_name()
+NYC_df['dropoff_day']=NYC_df['dropoff_datetime'].dt.day_name()
+NYC_df.head()
+
+#Number of Pickups and Dropoff on each day of the week
+figure,ax=plt.subplots(nrows=2,ncols=1,figsize=(10,10))
+sns.countplot(x='pickup_day',data=NYC_df,ax=ax[0])
+ax[0].set_title('Number of Pickups done on each day of the week')
+sns.countplot(x='dropoff_day',data=NYC_df,ax=ax[1])
+ax[1].set_title('Number of dropoffs done on each day of the week')
+
+plt.tight_layout()
+
+#1.1.1	Outlier Detection using IQR Method
+plt.figure(figsize=(15,8))
+plt.title("Box plot of  distance ")
+ax = sns.boxplot(data=NYC_df['distance'], orient="v")
+percentile_q1 = np.percentile(NYC_df['distance'],25)
+print(percentile_q1)
+percentile_q2 = np.percentile(NYC_df['distance'],50)
+print(percentile_q2)
+percentile_q3 = np.percentile(NYC_df['distance'],75)
+print(percentile_q3)
+
+1.2303056255050369
+2.0773105511108407
+3.8432264798565123
+
+
+iqr=percentile_q3 - percentile_q1
+lower_limit_outlier=percentile_q1-1.5*iqr
+upper_limit_outlier=percentile_q3+1.5*iqr
+
+print("lower limit for outlier  :",lower_limit_outlier)
+print("Upper limit for outlier  :",upper_limit_outlier)
+
+lower limit for outlier  : -2.689075656022177
+Upper limit for outlier  : 7.762607761383726
+
+
+
+#1.1.2	Split Data
+#For Standarization  apply z-score
+from scipy.stats import zscore
+#Train test split
+X = nyc_df[features].apply(zscore)[:100000]
+y=nyc_df['trip_duration_hour'][:100000]
+
+
+# Importing train_test_split
+from sklearn.model_selection import train_test_split
+
+
+X_train,X_test,y_train,y_test = train_test_split(X,y,test_size=0.2,random_state=42)
+
+
+print(X_train.shape,y_train.shape)
+print(X_test.shape,y_test.shape)
+
+(25828, 18) (25828,)
+(6458, 18) (6458,)
+
+#2.1.2	GradientBoosting
+# Number of trees
+n_estimators = [100,120]
+
+# Maximum depth of trees
+max_depth = [5,8,10]
+
+# Minimum number of samples required to split a node
+min_samples_split = [50,80]
+
+# Minimum number of samples required at each leaf node
+min_samples_leaf = [40,50]
+
+
+# HYperparameter Grid
+param_gb = {'n_estimators' : n_estimators,
+'max_depth' : max_depth,
+'min_samples_split' : min_samples_split,
+'min_samples_leaf' : min_samples_leaf}
+
+
+
+
+
+
+
+# Create an instance of the  GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+gb_model=GradientBoostingRegressor()
+
+# Grid search
+gb_grid = GridSearchCV(estimator=gb_model,
+                       param_grid = param_gb,
+                       cv = 3, verbose=2, scoring='r2')
+
+gb_grid.fit(X_train,y_train)
+
+
+#2.1.3	Light GBM
+from lightgbm import LGBMRegressor
+
+In [ ]:
+
+# Applying LightGBM
+n_estimator=[5,10,20] # No. of tree
+max_depth=[5,7,9] # max depth of tree
+min_samples_split=[40,50]
+params={"n_estimator":n_estimator,"max_depth":max_depth,"min_samples_split":min_samples_split}
+lgb=LGBMRegressor()
+gs_lgb=GridSearchCV(lgb,params,cv=3,verbose=2,scoring='r2')
+gs_lgb.fit(X_train,y_train)
+print(gs_lgb.best_score_)
+print(gs_lgb.best_params_)
+
+
+
+gs_lgb.best_estimator_
+
+LGBMRegressor(max_depth=5, min_samples_split=40, n_estimator=5)
+
+gs_lgb_opt_model = gs_lgb.best_estimator_
+
+
+y_preds_lgb = gs_lgb_opt_model.predict(X_test)
+y_pred_lgb_train=gs_lgb_opt_model.predict(X_train)
+
+
+#Evaluation metrics for Test set
+EvaluationMetric(X_test,y_test,y_preds_lgb)
+
+
+
+
+
